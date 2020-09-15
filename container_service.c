@@ -4,6 +4,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+//libpgn & zlib
+#include "include/png.h"
+#include <zlib.h>
+
+
 int main()
 {
 //printf("\nA sample C program\n\n");
