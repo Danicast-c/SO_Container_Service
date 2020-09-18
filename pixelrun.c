@@ -21,10 +21,31 @@
 #include <png.h>
 #include <string.h>
 
+//Function declaration:
+void process_png_file(char *filename);
+void read_png_file(char *filename);
+void write_png_file(char *filename, int color);
+void erase_image (char *filename);
+
+
 int width, height;
 png_byte color_type;
 png_byte bit_depth;
 png_bytep *row_pointers = NULL;
+
+
+
+int main(int argc, char *argv[]) {
+  if(argc != 2) abort();
+
+  read_png_file(argv[1]);
+
+  //erase_image (argv[1]);
+
+
+  return 0;
+}
+
 
 void read_png_file(char *filename) {
   FILE *fp = fopen(filename, "rb");
@@ -87,6 +108,9 @@ void read_png_file(char *filename) {
 
   //Destroy to avoid memory leak
   png_destroy_read_struct(&png, &info, NULL);
+
+  //Call the process
+  process_png_file(filename);
 }
 
 void write_png_file(char *filename, int color) {
@@ -99,17 +123,15 @@ void write_png_file(char *filename, int color) {
   else if (color == 1) location = "images/G/";
   else if (color == 2) location = "images/R/";
   else {
-    printf("Color incorrecto, ruta no asignada\n");
+    printf("Wrong color, route not asigned\n");
     abort();
   }
   sprintf(route,"%s%s",location,filename);
-  printf("Ruta para guardar imagen: %s\n",route);
-  //strncat(location, filename, (sizeof(location) - strlen(location)) );
-
-  //FILE *fp = fopen(filename, "wb");
+  printf("Route to store the image: %s\n",route);
+  
   FILE *fp = fopen(route, "wb");
   if(!fp) {
-    printf("No se pudo crear el archivo \n");
+    printf("Impossible to create the stored image\n");
     abort();
   }
 
@@ -173,7 +195,7 @@ void process_png_file(char *filename) {
       G+=px[1];
       B+=px[2];
 
-      printf("%4d, %4d = RGBA(%3d, %3d, %3d, %3d)\n", x, y, px[0], px[1], px[2], px[3]);
+      //printf("%4d, %4d = RGBA(%3d, %3d, %3d, %3d)\n", x, y, px[0], px[1], px[2], px[3]);
     }
   }
   printf("Total de color: R:%d, G:%d, B:%d\n",R,G,B);
@@ -199,12 +221,9 @@ void process_png_file(char *filename) {
   write_png_file(filename, color);
 }
 
-int main(int argc, char *argv[]) {
-  if(argc != 3) abort();
-
-  read_png_file(argv[1]);
-  process_png_file(argv[1]);
-  //write_png_file(argv[1], 0);
-
-  return 0;
+void erase_image (char *filename){
+  if (remove(filename) == 0) 
+      printf("Deleted successfully\n"); 
+  else
+      printf("Unable to delete the file\n");
 }
