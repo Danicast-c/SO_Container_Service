@@ -23,7 +23,7 @@
 
 //Function declaration:
 void process_png_file(char *filename);
-void read_png_file(char *filename);
+void read_png_file(char *filename, int not_trusted);
 void write_png_file(char *filename, int color);
 void erase_image (char *filename);
 
@@ -38,7 +38,7 @@ png_bytep *row_pointers = NULL;
 int main(int argc, char *argv[]) {
   if(argc != 2) abort();
 
-  read_png_file(argv[1]);
+  read_png_file(argv[1],0);
 
   //erase_image (argv[1]);
 
@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
 }
 
 
-void read_png_file(char *filename) {
+void read_png_file(char *filename, int not_trusted) {
   FILE *fp = fopen(filename, "rb");
 
   png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -109,9 +109,10 @@ void read_png_file(char *filename) {
   //Destroy to avoid memory leak
   png_destroy_read_struct(&png, &info, NULL);
 
-  //Call the process
-  process_png_file(filename);
-}
+  //Call the next process
+  if (not_trusted==1) write_png_file(filename, 3);
+  else process_png_file(filename);
+  }
 
 void write_png_file(char *filename, int color) {
   int y;
@@ -121,7 +122,8 @@ void write_png_file(char *filename, int color) {
   char route[80];
   if (color == 0) location = "images/R/";
   else if (color == 1) location = "images/G/";
-  else if (color == 2) location = "images/R/";
+  else if (color == 2) location = "images/B/";
+  else if (color == 3) location = "images/not_trusted/";
   else {
     printf("Wrong color, route not asigned\n");
     abort();
