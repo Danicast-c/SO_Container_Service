@@ -1,132 +1,232 @@
 #include<stdio.h>
-
-#include <sys/types.h>
+//#include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-//libpgn & zlib
-#include "include/png.h"
+#include <png.h>
 #include <zlib.h>
 #include <stdlib.h>
 #include <string.h>
 
+//Functions declaration
+void create_files();
+void process_png_file(char *filename);
+void read_png_file(char *filename, int not_trusted);
+void write_png_file(char *filename, int color);
+void erase_image (char *filename);
 
-int main()
-{
-//printf("\nA sample C program\n\n");
+//Global variables declaration
 
-// Create files to store the images
-struct stat st = {0};
-if (stat("images", &st) == -1) {
-    mkdir("images", 0700);
-    mkdir("images/R", 0700);
-    mkdir("images/G", 0700);
-    mkdir("images/B", 0700);
-    mkdir("images/not_trusted", 0700);
-} else {
-	printf("\nThe images files already exist\n");
+int width, height;
+png_byte color_type;
+png_byte bit_depth;
+png_bytep *row_pointers = NULL;
+
+
+
+int main(int argc, char *argv[]) {
+  if(argc != 2) abort();
+
+  create_files();
+
+  //Second argument is not_trusted: (0->RGB, 1->Not_trusted)
+  read_png_file(argv[1],0);
+
+
+
+  return 0;
 }
 
 
+void process_png_file(char *filename) {
+  int R = 0;
+  int G = 0;
+  int B = 0;
+  int color;
+  for(int y = 0; y < height; y++) {
+    png_bytep row = row_pointers[y];
+    for(int x = 0; x < width; x++) {
+      png_bytep px = &(row[x * 4]);
+      // Do something awesome for each pixel here...
 
+      R+=px[0];
+      G+=px[1];
+      B+=px[2];
 
-png_image image; /* The control structure used by libpng */
-
-/* Initialize the 'png_image' structure. */
-memset(&image, 0, (sizeof image));
-image.version = PNG_IMAGE_VERSION;
-
-/* The first argument is the file to read: */
-if (png_image_begin_read_from_file(&image, "baboon.png") != 0)
-{
- printf("\nStarted reading the image\n");
- png_bytep buffer;
-
- /* Set the format in which to read the PNG file; this code chooses a
-  * simple sRGB format with a non-associated alpha channel, adequate to
-  * store most images.
-  */
- image.format = PNG_FORMAT_RGBA;
-
- /* Now allocate enough memory to hold the image in this format; the
-  * PNG_IMAGE_SIZE macro uses the information about the image (width,
-  * height and format) stored in 'image'.
-  */
- buffer = malloc(PNG_IMAGE_SIZE(image));
-
- /* If enough memory was available, read the image in the desired
-  * format, then write the result out to the new file.  'background' is
-  * not necessary when reading the image, because the alpha channel is
-  * preserved; if it were to be removed, for example if we requested
-  * PNG_FORMAT_RGB, then either a solid background color would have to
-  * be supplied, or the output buffer would have to be initialized to
-  * the actual background of the image.
-  *
-  * The fourth argument to png_image_finish_read is the 'row_stride' -
-  * this is the number of components allocated for the image in each
-  * row.  It has to be at least as big as the value returned by
-  * PNG_IMAGE_ROW_STRIDE, but if you just allocate space for the
-  * default, minimum size, using PNG_IMAGE_SIZE as above, you can pass
-  * zero.
-  *
-  * The final argument is a pointer to a buffer for the colormap;
-  * colormaps have exactly the same format as a row of image pixels
-  * (so you choose what format to make the colormap by setting
-  * image.format).  A colormap is only returned if
-  * PNG_FORMAT_FLAG_COLORMAP is also set in image.format, so in this
-  * case NULL is passed as the final argument.  If you do want to force
-  * all images into an index/color-mapped format, then you can use:
-  *
-  *    PNG_IMAGE_COLORMAP_SIZE(image)
-  *
-  * to find the maximum size of the colormap in bytes.
-  */
- if (buffer != NULL &&
-    png_image_finish_read(&image, NULL/*background*/, buffer,
-        0/*row_stride*/, NULL/*colormap*/) != 0)
- {
-    /* Now write the image out to the second argument.  In the write
-     * call 'convert_to_8bit' allows 16-bit data to be squashed down to
-     * 8 bits; this isn't necessary here because the original read was
-     * to the 8-bit format.
-     */
-    if (png_image_write_to_file(&image, "baboon2.png", 0/*convert_to_8bit*/,
-        buffer, 0/*row_stride*/, NULL/*colormap*/) != 0)
-    {
-       /* The image has been written successfully. */
-       exit(0);
+      //printf("%4d, %4d = RGBA(%3d, %3d, %3d, %3d)\n", x, y, px[0], px[1], px[2], px[3]);
     }
- }
- else
- {
-    /* Calling png_image_free is optional unless the simplified API was
-     * not run to completion.  In this case, if there wasn't enough
-     * memory for 'buffer', we didn't complete the read, so we must
-     * free the image:
-     */
-    if (buffer == NULL)
-       png_image_free(&image);
-    else
-       free(buffer);
+  }
+  printf("Total de color: R:%d, G:%d, B:%d\n",R,G,B);
+
+  //Indentifies the predominant color
+  if (R >= G && R >= B){
+    color = 0;
+    printf("R is the predominant color.\n", R);
+  }
+  else if (G >= R && G >= B){
+    color = 1;
+    printf("R is the predominant color.\n", G);
+  }
+  else if (B >= R && B >= G){
+    color = 2;
+    printf("R is the predominant color.\n", B);
+  }
+  else {
+    printf("Problem identifying the color\n");
+    abort();
+  }
+
+  write_png_file(filename, color);
 }
 
-/* Something went wrong reading or writing the image.  libpng stores a
-* textual message in the 'png_image' structure:
-*/
-fprintf(stderr, "pngtopng: error: %s\n", image.message);
-exit(1);
+void erase_image (char *filename){
+  if (remove(filename) == 0) 
+      printf("Deleted successfully\n"); 
+  else
+      printf("Unable to delete the file\n");
 }
 
-fprintf(stderr, "pngtopng: usage: pngtopng input-file output-file\n");
-exit(2);
 
+void read_png_file(char *filename, int not_trusted) {
+  FILE *fp = fopen(filename, "rb");
 
+  png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  if(!png) abort();
 
+  png_infop info = png_create_info_struct(png);
+  if(!info) abort();
 
+  if(setjmp(png_jmpbuf(png))) abort();
 
+  png_init_io(png, fp);
 
+  png_read_info(png, info);
 
-//printf("%d \n",result );
+  width      = png_get_image_width(png, info);
+  height     = png_get_image_height(png, info);
+  color_type = png_get_color_type(png, info);
+  bit_depth  = png_get_bit_depth(png, info);
 
-return 0;
+  // Read any color_type into 8bit depth, RGBA format.
+  // See http://www.libpng.org/pub/png/libpng-manual.txt
+
+  if(bit_depth == 16)
+    png_set_strip_16(png);
+
+  if(color_type == PNG_COLOR_TYPE_PALETTE)
+    png_set_palette_to_rgb(png);
+
+  // PNG_COLOR_TYPE_GRAY_ALPHA is always 8 or 16bit depth.
+  if(color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
+    png_set_expand_gray_1_2_4_to_8(png);
+
+  if(png_get_valid(png, info, PNG_INFO_tRNS))
+    png_set_tRNS_to_alpha(png);
+
+  // These color_type don't have an alpha channel then fill it with 0xff.
+  if(color_type == PNG_COLOR_TYPE_RGB ||
+     color_type == PNG_COLOR_TYPE_GRAY ||
+     color_type == PNG_COLOR_TYPE_PALETTE)
+    png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
+
+  if(color_type == PNG_COLOR_TYPE_GRAY ||
+     color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+    png_set_gray_to_rgb(png);
+
+  png_read_update_info(png, info);
+
+  if (row_pointers) abort();
+
+  row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * height);
+  for(int y = 0; y < height; y++) {
+    row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png,info));
+  }
+
+  png_read_image(png, row_pointers);
+
+  fclose(fp);
+
+  //Destroy to avoid memory leak
+  png_destroy_read_struct(&png, &info, NULL);
+
+  //Call the next process
+  if (not_trusted==1) write_png_file(filename, 3);
+  else process_png_file(filename);
+}
+
+void write_png_file(char *filename, int color) {
+  int y;
+
+  //Chooses the correct directory to store the image
+  char* location;
+  char route[80];
+  if (color == 0) location = "images/R/";
+  else if (color == 1) location = "images/G/";
+  else if (color == 2) location = "images/B/";
+  else if (color == 3) location = "images/not_trusted/";
+  else {
+    printf("Wrong color, route not asigned\n");
+    abort();
+  }
+  sprintf(route,"%s%s",location,filename);
+  printf("Route to store the image: %s\n",route);
+  
+  FILE *fp = fopen(route, "wb");
+  if(!fp) {
+    printf("Impossible to create the stored image\n");
+    abort();
+  }
+
+  png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  if (!png) abort();
+
+  png_infop info = png_create_info_struct(png);
+  if (!info) abort();
+
+  if (setjmp(png_jmpbuf(png))) abort();
+
+  png_init_io(png, fp);
+
+  // Output is 8bit depth, RGBA format.
+  png_set_IHDR(
+    png,
+    info,
+    width, height,
+    8,
+    PNG_COLOR_TYPE_RGBA,
+    PNG_INTERLACE_NONE,
+    PNG_COMPRESSION_TYPE_DEFAULT,
+    PNG_FILTER_TYPE_DEFAULT
+  );
+  png_write_info(png, info);
+
+  if (!row_pointers) abort();
+
+  png_write_image(png, row_pointers);
+  png_write_end(png, NULL);
+
+  for(int y = 0; y < height; y++) {
+    free(row_pointers[y]);
+  }
+  free(row_pointers);
+
+  fclose(fp);
+
+  //Destroy to avoid memory leak
+  png_destroy_write_struct(&png, &info);
+
+}
+
+void create_files(){
+// Create files to store the images
+  struct stat st = {0};
+  if (stat("images", &st) == -1) {
+      mkdir("images", 0700);
+      mkdir("images/R", 0700);
+      mkdir("images/G", 0700);
+      mkdir("images/B", 0700);
+      mkdir("images/not_trusted", 0700);
+  } else {
+    printf("\nThe images files already exist\n");
+  }
+
 }
