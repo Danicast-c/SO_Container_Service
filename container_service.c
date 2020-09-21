@@ -15,7 +15,7 @@
 //Functions declaration
 void create_files();
 void process_png_file(char *filename, int width, int height, png_bytep *row_pointers);
-void read_png_file(char *filename, int not_trusted);
+void read_png_file(char *filename, int cont , int not_trusted);
 void write_png_file(char *filename, int color,int width, int height, png_bytep *row_pointers);
 void erase_image (char *filename);
 
@@ -40,20 +40,15 @@ int main(int argc, char *argv[]) {
 
   //*____________________________________________SERVER START
   int fd =0, confd = 0,b,tot;
-
+  int cont = 0;
+  char buff[1025];
+  int num;
   struct sockaddr_in serv_addr;
   struct sockaddr_in c_addr;
   struct sockaddr_in client_addr;
-  {
-      
-  };
-
-  char buff[1025];
-  int num;
-
 
   fd = socket(AF_INET, SOCK_STREAM, 0);
-  printf("Socket created\n Waiting for client...\n");
+  printf("Socket created\nWaiting for client...\n");
 
   memset(&serv_addr, '0', sizeof(serv_addr));
   memset(buff, '0', sizeof(buff));
@@ -68,10 +63,11 @@ int main(int argc, char *argv[]) {
   bind(fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
   listen(fd, 10);
 
+ 
   while(1){
-
-      prinft("Client connected");
+      
       confd = accept(fd, (struct sockaddr*)NULL, NULL);
+      printf("Client connected\n");
       printf("Connected to Clent: %s:%d\n",inet_ntoa(serv_addr.sin_addr),ntohs(serv_addr.sin_port));
       printf("Connected to Clent: %s:%d\n",inet_ntoa(c_addr.sin_addr),ntohs(c_addr.sin_port));
 
@@ -105,9 +101,11 @@ int main(int argc, char *argv[]) {
       if (tot==0){
         printf("Client disconected\n" );
       } else{
-        read_png_file("provacopy.png",0);
+        cont +=1;
+        read_png_file("provacopy.png", cont,0);
         erase_image("provacopy.png");
       }
+      //printf("Image #%d\n",cont );
       
   }
 
@@ -157,14 +155,12 @@ void process_png_file(char *filename, int width, int height, png_bytep *row_poin
 }
 
 void erase_image (char *filename){
-  if (remove(filename) == 0) 
-      //printf("Deleted successfully\n"); 
-  else
+  if (remove(filename) != 0) 
       printf("Unable to delete the file\n");
 }
 
 
-void read_png_file(char *filename, int not_trusted) {
+void read_png_file(char *filename, int cont ,int not_trusted) {
 
   int width, height;
   png_byte color_type;
@@ -229,12 +225,15 @@ void read_png_file(char *filename, int not_trusted) {
 
   fclose(fp);
 
+  //Choose new image name
+  char new_name[25];
+  sprintf(new_name,"image_%d.png",cont);
   //Destroy to avoid memory leak
   png_destroy_read_struct(&png, &info, NULL);
 
   //Call the next process
-  if (not_trusted==1) write_png_file(filename, 3 , width, height, row_pointers);
-  else process_png_file(filename, width, height, row_pointers);
+  if (not_trusted==1) write_png_file(new_name, 3 , width, height, row_pointers);
+  else process_png_file(new_name, width, height, row_pointers);
 }
 
 void write_png_file(char *filename, int color, int width, int height, png_bytep *row_pointers) {
