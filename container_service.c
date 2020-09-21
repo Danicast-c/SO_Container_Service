@@ -1,43 +1,121 @@
 #include<stdio.h>
-//#include <sys/types.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <png.h>
 #include <zlib.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <errno.h>
 
 //Functions declaration
 void create_files();
-void process_png_file(char *filename);
+void process_png_file(char *filename, int width, int height, png_bytep *row_pointers);
 void read_png_file(char *filename, int not_trusted);
-void write_png_file(char *filename, int color);
+void write_png_file(char *filename, int color,int width, int height, png_bytep *row_pointers);
 void erase_image (char *filename);
 
 //Global variables declaration
 
-int width, height;
-png_byte color_type;
-png_byte bit_depth;
-png_bytep *row_pointers = NULL;
+// int width, height;
+// png_byte color_type;
+// png_byte bit_depth;
+// png_bytep *row_pointers = NULL;
 
 
 
 int main(int argc, char *argv[]) {
-  if(argc != 2) abort();
+  //if(argc != 2) abort();
 
   create_files();
 
   //Second argument is not_trusted: (0->RGB, 1->Not_trusted)
-  read_png_file(argv[1],0);
+  //read_png_file("baboon.png",0);
+  //erase_image();
 
 
+  //*____________________________________________SERVER START
+  int fd =0, confd = 0,b,tot;
+
+  struct sockaddr_in serv_addr;
+  struct sockaddr_in c_addr;
+  struct sockaddr_in client_addr;
+  {
+      
+  };
+
+  char buff[1025];
+  int num;
+
+
+  fd = socket(AF_INET, SOCK_STREAM, 0);
+  printf("Socket created\n Waiting for client...\n");
+
+  memset(&serv_addr, '0', sizeof(serv_addr));
+  memset(buff, '0', sizeof(buff));
+
+  serv_addr.sin_family = AF_INET;
+  serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  serv_addr.sin_port = htons(5000);
+
+  int true_val = 1;
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &true_val, sizeof(int));
+
+  bind(fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+  listen(fd, 10);
+
+  while(1){
+
+      prinft("Client connected");
+      confd = accept(fd, (struct sockaddr*)NULL, NULL);
+      printf("Connected to Clent: %s:%d\n",inet_ntoa(serv_addr.sin_addr),ntohs(serv_addr.sin_port));
+      printf("Connected to Clent: %s:%d\n",inet_ntoa(c_addr.sin_addr),ntohs(c_addr.sin_port));
+
+      //printf("Client connected at %d:%d\n", serv_addr.sin_port, sockaddr.port);
+
+      if (confd==-1) {
+          perror("Accept");
+          continue;
+      }
+      FILE* fp = fopen( "provacopy.png", "wb");
+      tot=0;
+      if(fp != NULL){
+        while( (b = recv(confd, buff, 1024,0))> 0 ) {
+          tot+=b;
+          fwrite(buff, 1, b, fp);
+        }
+      //close(confd);
+
+
+        printf("Received byte: %d\n",tot);
+        if (b<0) perror("Receiving");
+
+       
+
+        fclose(fp);
+      } else {
+        perror("File");
+      }
+      close(confd);
+
+      if (tot==0){
+        printf("Client disconected\n" );
+      } else{
+        read_png_file("provacopy.png",0);
+        erase_image("provacopy.png");
+      }
+      
+  }
 
   return 0;
 }
 
 
-void process_png_file(char *filename) {
+void process_png_file(char *filename, int width, int height, png_bytep *row_pointers) {
   int R = 0;
   int G = 0;
   int B = 0;
@@ -74,19 +152,25 @@ void process_png_file(char *filename) {
     printf("Problem identifying the color\n");
     abort();
   }
-
-  write_png_file(filename, color);
+  write_png_file(filename, color , width, height, row_pointers);
+  
 }
 
 void erase_image (char *filename){
   if (remove(filename) == 0) 
-      printf("Deleted successfully\n"); 
+      //printf("Deleted successfully\n"); 
   else
       printf("Unable to delete the file\n");
 }
 
 
 void read_png_file(char *filename, int not_trusted) {
+
+  int width, height;
+  png_byte color_type;
+  png_byte bit_depth;
+  png_bytep *row_pointers = NULL;
+
   FILE *fp = fopen(filename, "rb");
 
   png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -149,11 +233,11 @@ void read_png_file(char *filename, int not_trusted) {
   png_destroy_read_struct(&png, &info, NULL);
 
   //Call the next process
-  if (not_trusted==1) write_png_file(filename, 3);
-  else process_png_file(filename);
+  if (not_trusted==1) write_png_file(filename, 3 , width, height, row_pointers);
+  else process_png_file(filename, width, height, row_pointers);
 }
 
-void write_png_file(char *filename, int color) {
+void write_png_file(char *filename, int color, int width, int height, png_bytep *row_pointers) {
   int y;
 
   //Chooses the correct directory to store the image
@@ -199,6 +283,10 @@ void write_png_file(char *filename, int color) {
   );
   png_write_info(png, info);
 
+  // To remove the alpha channel for PNG_COLOR_TYPE_RGB format,
+  // Use png_set_filler().
+  //png_set_filler(png, 0, PNG_FILLER_AFTER);
+
   if (!row_pointers) abort();
 
   png_write_image(png, row_pointers);
@@ -214,6 +302,7 @@ void write_png_file(char *filename, int color) {
   //Destroy to avoid memory leak
   png_destroy_write_struct(&png, &info);
 
+
 }
 
 void create_files(){
@@ -226,7 +315,7 @@ void create_files(){
       mkdir("images/B", 0700);
       mkdir("images/not_trusted", 0700);
   } else {
-    printf("\nThe images files already exist\n");
+    printf("The images files already exist\n");
   }
 
 }
