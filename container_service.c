@@ -31,6 +31,13 @@ void erase_image (char *filename);
 int main(int argc, char *argv[]) {
   //if(argc != 2) abort();
 
+  //Verify that the datavolume is mounted on the container
+  struct stat st = {0};
+  if (stat("datavolume", &st) == -1){
+    printf("Aborting: The datavolume is not mounted\n");
+    abort();
+  }
+
   create_files();
 
   //Second argument is not_trusted: (0->RGB, 1->Not_trusted)
@@ -46,6 +53,10 @@ int main(int argc, char *argv[]) {
   struct sockaddr_in serv_addr;
   struct sockaddr_in c_addr;
   struct sockaddr_in client_addr;
+
+  client_addr.sin_family = AF_INET;
+  socklen_t c_len = sizeof(client_addr);
+
 
   fd = socket(AF_INET, SOCK_STREAM, 0);
   printf("Socket created\nWaiting for client...\n");
@@ -66,10 +77,12 @@ int main(int argc, char *argv[]) {
  
   while(1){
       
-      confd = accept(fd, (struct sockaddr*)NULL, NULL);
-      printf("Client connected\n");
-      printf("Connected to Clent: %s:%d\n",inet_ntoa(serv_addr.sin_addr),ntohs(serv_addr.sin_port));
-      printf("Connected to Clent: %s:%d\n",inet_ntoa(c_addr.sin_addr),ntohs(c_addr.sin_port));
+      //confd = accept(fd, (struct sockaddr*)NULL, NULL);
+    confd = accept(fd, (struct sockaddr*)&client_addr, &c_len);
+      //printf("Client connected\n");
+      //printf("Connected to Clent: %s:%d\n",inet_ntoa(serv_addr.sin_addr),ntohs(serv_addr.sin_port));
+      //printf("Connected to Clent: %s:%d\n",inet_ntoa(c_addr.sin_addr),ntohs(c_addr.sin_port));
+      printf("Client connected: %s:%d\n",inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
 
       //printf("Client connected at %d:%d\n", serv_addr.sin_port, sockaddr.port);
 
@@ -242,10 +255,10 @@ void write_png_file(char *filename, int color, int width, int height, png_bytep 
   //Chooses the correct directory to store the image
   char* location;
   char route[80];
-  if (color == 0) location = "images/R/";
-  else if (color == 1) location = "images/G/";
-  else if (color == 2) location = "images/B/";
-  else if (color == 3) location = "images/not_trusted/";
+  if (color == 0) location = "datavolume/images/R/";
+  else if (color == 1) location = "datavolume/images/G/";
+  else if (color == 2) location = "datavolume/images/B/";
+  else if (color == 3) location = "datavolume/images/not_trusted/";
   else {
     printf("Wrong color, route not asigned\n");
     abort();
@@ -307,12 +320,13 @@ void write_png_file(char *filename, int color, int width, int height, png_bytep 
 void create_files(){
 // Create files to store the images
   struct stat st = {0};
-  if (stat("images", &st) == -1) {
-      mkdir("images", 0700);
-      mkdir("images/R", 0700);
-      mkdir("images/G", 0700);
-      mkdir("images/B", 0700);
-      mkdir("images/not_trusted", 0700);
+  if (stat("datavolume/images", &st) == -1) {
+      //mkdir("datavolume", 0700);
+      mkdir("datavolume/images", 0700);
+      mkdir("datavolume/images/R", 0700);
+      mkdir("datavolume/images/G", 0700);
+      mkdir("datavolume/images/B", 0700);
+      mkdir("datavolume/images/not_trusted", 0700);
   } else {
     printf("The images files already exist\n");
   }
