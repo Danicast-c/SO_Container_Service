@@ -19,109 +19,125 @@ void read_png_file(char *filename, int cont , int not_trusted);
 void write_png_file(char *filename, int color,int width, int height, png_bytep *row_pointers);
 void erase_image (char *filename);
 
-//Global variables declaration
-
-// int width, height;
-// png_byte color_type;
-// png_byte bit_depth;
-// png_bytep *row_pointers = NULL;
-
-
-
-int main(int argc, char *argv[]) {
-  //if(argc != 2) abort();
+int main() {
+  //Variable Declaration
+  int fd =0, confd = 0,b,tot;
+  int cont = 0;
+  int true_val = 1;
+  char buff[1025];
+  char* filename = "datavolume/configuracion.config";
+  char not_trusted[13]= "not_trusted:";
+  struct sockaddr_in serv_addr;
+  struct sockaddr_in c_addr;
+  struct sockaddr_in client_addr;
+  struct stat st = {0};
 
   //Verify that the datavolume is mounted on the container
-  struct stat st = {0};
   if (stat("datavolume", &st) == -1){
     printf("Aborting: The datavolume is not mounted\n");
     abort();
   }
 
+  //Verify that the config file exist
+  FILE *config_file;
+    config_file = fopen(filename, "r");
+    if (config_file == NULL){
+        printf("Aborting: configuracion file don't exist\n");
+        abort();
+    }
+  fclose(config_file);
+
+  //Create the images files on the container
   create_files();
 
-  //Second argument is not_trusted: (0->RGB, 1->Not_trusted)
-  //read_png_file("baboon.png",0);
-  //erase_image();
-
-
-  //*____________________________________________SERVER START
-  int fd =0, confd = 0,b,tot;
-  int cont = 0;
-  char buff[1025];
-  int num;
-  struct sockaddr_in serv_addr;
-  struct sockaddr_in c_addr;
-  struct sockaddr_in client_addr;
-
+  //SERVER START
   client_addr.sin_family = AF_INET;
   socklen_t c_len = sizeof(client_addr);
-
-
   fd = socket(AF_INET, SOCK_STREAM, 0);
   printf("Socket created\nWaiting for client...\n");
-
   memset(&serv_addr, '0', sizeof(serv_addr));
   memset(buff, '0', sizeof(buff));
-
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   serv_addr.sin_port = htons(5000);
-
-  int true_val = 1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &true_val, sizeof(int));
-
   bind(fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
   listen(fd, 10);
-
  
   while(1){
-      
-      //confd = accept(fd, (struct sockaddr*)NULL, NULL);
+    int on_config= 0;
+    int trusted = 1;
+    char ip[20];
+    char str[20];
+
     confd = accept(fd, (struct sockaddr*)&client_addr, &c_len);
-      //printf("Client connected\n");
-      //printf("Connected to Clent: %s:%d\n",inet_ntoa(serv_addr.sin_addr),ntohs(serv_addr.sin_port));
-      //printf("Connected to Clent: %s:%d\n",inet_ntoa(c_addr.sin_addr),ntohs(c_addr.sin_port));
-      printf("Client connected: %s:%d\n",inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
 
-      //printf("Client connected at %d:%d\n", serv_addr.sin_port, sockaddr.port);
-
-      if (confd==-1) {
-          perror("Accept");
-          continue;
+    printf("Client connected: %s:%d\n",inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
+    strcpy(ip, inet_ntoa(client_addr.sin_addr));
+    
+    FILE *config_file;
+    config_file = fopen(filename, "r");
+    if (config_file == NULL){
+      printf("Aborting: Config file is lost(?)\n");
+      abort();
+    }
+    //Verify the status of the ip
+    while (fgets(str, 20, config_file) != NULL){
+      str[strlen(str) -1] = '\0';
+      //printf("Comparing: %s VS %s\n",str,ip );
+      //Verify the not_trusted ip
+      if (strcmp(str, not_trusted) == 0) trusted = 2;
+      //If ip is on file
+      else if (strcmp(str, ip) == 0){
+        on_config = trusted;
+        if (on_config == 1){
+          printf("IP is on list\n");
+        } else {
+          printf("IP is not trusted\n");
+        }
+        break;
       }
-      FILE* fp = fopen( "provacopy.png", "wb");
+    }
+    fclose(config_file);
+
+    //if the ip isn't on the config file
+    if (on_config == 0){
+      close(confd);
+      printf("Unrecognized IP: Shutting down connection\n\nWaiting for a new client...\n");
+    } else {
+    //if the ip is in the file
+      if (confd==-1) {
+        perror("Accept");
+        continue;
+      }
+
+      FILE* fp = fopen( "temp.png", "wb");
       tot=0;
       if(fp != NULL){
         while( (b = recv(confd, buff, 1024,0))> 0 ) {
           tot+=b;
           fwrite(buff, 1, b, fp);
         }
-      //close(confd);
-
-
+        //Recieve the image
         printf("Received byte: %d\n",tot);
         if (b<0) perror("Receiving");
-
-       
-
         fclose(fp);
       } else {
         perror("File");
       }
       close(confd);
 
+      //If client type fin
       if (tot==0){
-        printf("Client disconected\n" );
+        printf("Client disconected\n\n" );
       } else{
+        //The image is ready to process
         cont +=1;
-        read_png_file("provacopy.png", cont,0);
-        erase_image("provacopy.png");
+        read_png_file("temp.png", cont,on_config);
+        erase_image("temp.png");
       }
-      //printf("Image #%d\n",cont );
-      
+    } 
   }
-
   return 0;
 }
 
@@ -135,16 +151,13 @@ void process_png_file(char *filename, int width, int height, png_bytep *row_poin
     png_bytep row = row_pointers[y];
     for(int x = 0; x < width; x++) {
       png_bytep px = &(row[x * 4]);
-      // Do something awesome for each pixel here...
-
+      // Pixel color counter
       R+=px[0];
       G+=px[1];
       B+=px[2];
-
-      //printf("%4d, %4d = RGBA(%3d, %3d, %3d, %3d)\n", x, y, px[0], px[1], px[2], px[3]);
     }
   }
-  printf("Total de color: R:%d, G:%d, B:%d\n",R,G,B);
+  //printf("Total de color: R:%d, G:%d, B:%d\n",R,G,B);
 
   //Indentifies the predominant color
   if (R >= G && R >= B){
@@ -245,7 +258,7 @@ void read_png_file(char *filename, int cont ,int not_trusted) {
   png_destroy_read_struct(&png, &info, NULL);
 
   //Call the next process
-  if (not_trusted==1) write_png_file(new_name, 3 , width, height, row_pointers);
+  if (not_trusted==2) write_png_file(new_name, 3 , width, height, row_pointers);
   else process_png_file(new_name, width, height, row_pointers);
 }
 
